@@ -1,0 +1,187 @@
+/* === Base Styles === */
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f4f4f4;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center; 
+  min-height: 100vh;
+}
+
+/* === Menu & Game Containers === */
+.menu,
+.game {
+  text-align: center;
+  max-width: 600px;
+}
+
+/* === Tiles Container === */
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+/* === Tiles (Board size options etc.) === */
+.tile {
+  background-color: white;
+  padding: 20px 30px;
+  border: 2px solid #333;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 20px;
+  text-align: center;
+  min-width: 100px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  user-select: none;
+}
+
+.tile:hover:not(.disabled) {
+  background-color: #e3f2fd;
+  transform: scale(1.05);
+}
+
+.tile.selected {
+  background-color: #90caf9;
+  border-color: #42a5f5;
+}
+
+.tile.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* === Custom Input Fields === */
+.custom-inline-input {
+  width: 50px;
+  padding: 5px;
+  font-size: 1rem;
+  text-align: center;
+  margin: 0 4px;
+  border: none;
+  background-color: transparent;
+  outline: none;
+  -moz-appearance: textfield;
+  border-bottom: 2px solid #90caf9;
+  transition: border-color 0.3s ease;
+}
+
+
+/* === Buttons === */
+.back-button, .startGame-button, .reset-button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  user-select: none;
+}
+
+.reset-button{
+  display: block;
+  margin: 20px auto;
+}
+
+
+.reset-button.is-hidden {
+  visibility: hidden;
+  pointer-events: none; 
+}
+
+.reset-button.is-visible {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+:is(.back-button, .startGame-button):hover:not(:disabled) {
+  background-color: #1565c0;
+  transform: scale(1.05);
+}
+
+.startGame-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* === Game Board === */
+.board {
+  display: inline-block;
+  margin: 20px auto;
+  user-select: none;
+}
+
+.board-row {
+  display: flex;
+  justify-content: center;
+}
+
+.square {
+  width: 60px;
+  height: 60px;
+  background-color: white;
+  border: 2px solid #444;
+  font-size: 2.5rem;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 10%;
+  cursor: pointer;
+  margin: 2px;
+  color: #444;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  user-select: none;
+}
+
+.square:hover:not(.winning) {
+  background-color: #f1f1f1;
+}
+
+.square.winning {
+  background-color: #4caf50;
+  color: white;
+  font-weight: 900;
+  border-color: #388e3c;
+  cursor: default;
+}
+
+/* === Status Text === */
+.status {
+  margin: 20px 0;
+  font-size: 18px;
+  font-weight: bold;
+  min-height: 24px; /* To prevent layout jump */
+}
+
+/* === Responsive Adjustments === */
+@media (max-width: 480px) {
+  .tile {
+    padding: 15px 20px;
+    font-size: 16px;
+    min-width: 80px;
+  }
+  .custom-inline-input {
+    width: 40px;
+    font-size: 0.9rem;
+  }
+  .square {
+    width: 45px;
+    height: 45px;
+    font-size: 18px;
+    line-height: 45px;
+    margin: 1px;
+  }
+  button {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+  .back-button {
+    font-size: 16px;
+  }
+}

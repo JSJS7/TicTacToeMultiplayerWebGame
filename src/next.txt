@@ -1,0 +1,4 @@
+-z graczem ganie
+-wynik
+
+- node.js + socket.io --> render + auto ping 
