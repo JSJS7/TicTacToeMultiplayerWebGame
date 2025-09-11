@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { socket } from "../socket";
 import "/src/App.css";
 
 function Square({ value, onClick, isWinning }) {
@@ -18,9 +19,7 @@ const COMPUTER_DELAY_MS = 500;
 
 function calculateWinner(squares, boardWidth, boardHeight) {
   const get = (r, c) => {
-    if (r < 0 || r >= boardHeight || c < 0 || c >= boardWidth) {
-      return null;
-    }
+    if (r < 0 || r >= boardHeight || c < 0 || c >= boardWidth) return null;
     return squares[r * boardWidth + c];
   };
 
@@ -29,9 +28,7 @@ function calculateWinner(squares, boardWidth, boardHeight) {
     if (!first) return null;
 
     for (let i = 1; i < WIN_LENGTH; i++) {
-      if (get(r + i * dr, c + i * dc) !== first) {
-        return null;
-      }
+      if (get(r + i * dr, c + i * dc) !== first) return null;
     }
 
     const line = Array.from(
@@ -120,15 +117,18 @@ function findBestMove(squares, boardWidth, boardHeight, player) {
   return emptySquares[Math.floor(Math.random() * emptySquares.length)];
 }
 
-function GameBoard({ boardSize: { boardWidth, boardHeight }, mode }) {
+function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
   const navigate = useNavigate();
+
   const [squares, setSquares] = useState(
     Array(boardWidth * boardHeight).fill(null)
   );
   const [xIsNext, setXIsNext] = useState(true);
   const [isComputing, setIsComputing] = useState(false);
+  const [playerSymbol, setPlayerSymbol] = useState(null);
 
   const winner = calculateWinner(squares, boardWidth, boardHeight);
+
   const status = winner
     ? `Winner: ${winner.player}`
     : squares.every(Boolean)
@@ -140,7 +140,6 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode }) {
       setIsComputing(true);
       const timeout = setTimeout(() => {
         const choice = findBestMove(squares, boardWidth, boardHeight, "O");
-
         if (choice !== undefined) {
           const next = squares.slice();
           next[choice] = "O";
@@ -153,12 +152,60 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode }) {
     }
   }, [xIsNext, winner, squares, mode, boardWidth, boardHeight]);
 
+  useEffect(() => {
+    if (mode !== "vs-player") return;
+
+    socket.connect();
+    socket.emit("joinLobby", lobbyId);
+
+    socket.on("assignSymbol", (symbol) => {
+      console.log("Assigned symbol:", symbol);
+      setPlayerSymbol(symbol);
+    });
+
+    socket.on("playerJoined", (id) => {
+      console.log("Another player joined:", id);
+    });
+
+    socket.on("moveMade", ({ index, player }) => {
+      setSquares((prev) => {
+        const copy = [...prev];
+        copy[index] = player;
+        return copy;
+      });
+      setXIsNext(player === "O");
+    });
+
+    return () => {
+      socket.off("assignSymbol");
+      socket.off("playerJoined");
+      socket.off("moveMade");
+      socket.disconnect();
+    };
+  }, [mode, lobbyId]);
+
   const handleClick = (i) => {
-    if (!xIsNext || isComputing || squares[i] || winner) return;
-    const next = squares.slice();
-    next[i] = "X";
-    setSquares(next);
-    setXIsNext(false);
+    if (squares[i] || winner) return;
+
+    if (mode === "vs-computer") {
+      if (!xIsNext || isComputing) return;
+      const next = squares.slice();
+      next[i] = "X";
+      setSquares(next);
+      setXIsNext(false);
+    } else if (mode === "vs-player") {
+      if (
+        (xIsNext && playerSymbol !== "X") ||
+        (!xIsNext && playerSymbol !== "O")
+      ) {
+        return;
+      }
+      const next = [...squares];
+      next[i] = playerSymbol;
+      setSquares(next);
+      setXIsNext(!xIsNext);
+      socket.emit("makeMove", { lobbyId, index: i, player: playerSymbol });
+    }
   };
 
   const handleReset = () => {
@@ -175,11 +222,24 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode }) {
       >
         ← Back
       </button>
+
       <h2>
         {mode === "vs-computer" ? "Vs Computer" : "Vs Player"} ({boardWidth}x
         {boardHeight})
       </h2>
+
       <div className="status">{status}</div>
+
+      {mode === "vs-player" && lobbyId && (
+        <p>
+          Share this link with a friend to join:{" "}
+          <strong>
+            {window.location.origin}/game?mode=vs-player&width={boardWidth}
+            &height={boardHeight}&lobby={lobbyId}
+          </strong>
+        </p>
+      )}
+
       <div className="board">
         {Array.from({ length: boardHeight }).map((_, row) => (
           <div key={row} className="board-row">
@@ -197,6 +257,7 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode }) {
           </div>
         ))}
       </div>
+
       <button
         onClick={handleReset}
         className={`reset-button ${

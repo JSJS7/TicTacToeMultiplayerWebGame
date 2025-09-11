@@ -6,6 +6,7 @@ import {
   Navigate,
   useSearchParams,
 } from "react-router-dom";
+import { useEffect } from "react";
 import "./App.css";
 import Settings from "./components/Settings";
 import GameBoard from "./components/GameBoard";
@@ -34,28 +35,48 @@ function Menu() {
 
 function GameLoader() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const mode = searchParams.get("mode");
+  const widthParam = parseInt(searchParams.get("width"), 10);
+  const heightParam = parseInt(searchParams.get("height"), 10);
+  const lobbyId = searchParams.get("lobby");
 
   const requiredParams = ["mode", "width", "height"];
-
-  const boardWidth = parseInt(searchParams.get("width"), 10);
-  const boardHeight = parseInt(searchParams.get("height"), 10);
-
   const isValid =
     requiredParams.every((param) => searchParams.get(param)) &&
-    !isNaN(boardWidth) &&
-    !isNaN(boardHeight) &&
-    boardWidth >= 3 &&
-    boardHeight >= 3 &&
-    boardWidth <= 20 &&
-    boardHeight <= 20;
+    !isNaN(widthParam) &&
+    !isNaN(heightParam) &&
+    widthParam >= 3 &&
+    heightParam >= 3 &&
+    widthParam <= 20 &&
+    heightParam <= 20;
+
+  useEffect(() => {
+    if (mode === "vs-player" && !lobbyId && isValid) {
+      const newLobby = Math.random().toString(36).substring(2, 8);
+      navigate(
+        `/game?mode=${mode}&width=${widthParam}&height=${heightParam}&lobby=${newLobby}`,
+        { replace: true }
+      );
+    }
+  }, [mode, lobbyId, isValid, widthParam, heightParam, navigate]);
 
   if (!isValid) {
     return <Navigate to="/" replace />;
   }
 
+  if (mode === "vs-player" && !lobbyId) {
+    return null;
+  }
 
-  return <GameBoard mode={mode} boardSize={{ boardWidth, boardHeight }} />;
+  return (
+    <GameBoard
+      mode={mode}
+      boardSize={{ boardWidth: widthParam, boardHeight: heightParam }}
+      lobbyId={lobbyId}
+    />
+  );
 }
 
 function App() {

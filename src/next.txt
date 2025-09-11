@@ -2,3 +2,7 @@
 -wynik
 
 - node.js + socket.io --> render + auto ping 
+
+- limit 2 osoby
+-disconnect handle
+-CORS

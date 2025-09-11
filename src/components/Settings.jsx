@@ -39,7 +39,7 @@ function Settings() {
 
   const handleBoardDimensionChange = (value, setter) => {
     if (value === "" || /^\d+$/.test(value)) {
-      setter(value);
+      setter(value === "" ? "" : parseInt(value, 10));
     }
   };
 
