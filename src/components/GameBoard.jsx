@@ -17,6 +17,7 @@ function Square({ value, onClick, isWinning }) {
 const WIN_LENGTH = 3;
 const COMPUTER_DELAY_MS = 500;
 
+// Keep client-side winner calculation for vs-computer mode
 function calculateWinner(squares, boardWidth, boardHeight) {
   const get = (r, c) => {
     if (r < 0 || r >= boardHeight || c < 0 || c >= boardWidth) return null;
@@ -126,17 +127,37 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
   const [xIsNext, setXIsNext] = useState(true);
   const [isComputing, setIsComputing] = useState(false);
   const [playerSymbol, setPlayerSymbol] = useState(null);
+  const [winner, setWinner] = useState(null);
+  const [isDraw, setIsDraw] = useState(false);
+  const [playerCount, setPlayerCount] = useState(1);
+  const [connectionStatus, setConnectionStatus] = useState("connecting");
 
-  const winner = calculateWinner(squares, boardWidth, boardHeight);
+  // Calculate winner for vs-computer mode
+  const localWinner =
+    mode === "vs-computer"
+      ? calculateWinner(squares, boardWidth, boardHeight)
+      : winner;
 
-  const status = winner
-    ? `Winner: ${winner.player}`
-    : squares.every(Boolean)
-    ? "It's a draw!"
-    : `Next: ${xIsNext ? "X" : "O"}`;
+  const getStatus = () => {
+    if (localWinner) {
+      return `Winner: ${localWinner.player}`;
+    }
 
+    if (isDraw || (mode === "vs-computer" && squares.every(Boolean))) {
+      return "It's a draw!";
+    }
+
+    if (mode === "vs-player" && playerCount < 2) {
+      return "Waiting for opponent...";
+    }
+
+    return `Next: ${xIsNext ? "X" : "O"}`;
+  };
+
+  const status = getStatus();
+  // Computer AI logic (vs-computer mode only)
   useEffect(() => {
-    if (!xIsNext && !winner && mode === "vs-computer") {
+    if (!xIsNext && !localWinner && mode === "vs-computer") {
       setIsComputing(true);
       const timeout = setTimeout(() => {
         const choice = findBestMove(squares, boardWidth, boardHeight, "O");
@@ -150,68 +171,149 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
       }, COMPUTER_DELAY_MS);
       return () => clearTimeout(timeout);
     }
-  }, [xIsNext, winner, squares, mode, boardWidth, boardHeight]);
+  }, [xIsNext, localWinner, squares, mode, boardWidth, boardHeight]);
 
+  // Multiplayer socket logic (vs-player mode only)
   useEffect(() => {
     if (mode !== "vs-player") return;
 
     socket.connect();
-    socket.emit("joinLobby", lobbyId);
+    setConnectionStatus("connecting");
 
-    socket.on("assignSymbol", (symbol) => {
-      console.log("Assigned symbol:", symbol);
-      setPlayerSymbol(symbol);
+    socket.on("connect", () => {
+      console.log("Connected to server");
+      setConnectionStatus("connected");
+      socket.emit("joinLobby", { lobbyId, boardWidth, boardHeight });
     });
 
-    socket.on("playerJoined", (id) => {
-      console.log("Another player joined:", id);
+    socket.on("disconnect", () => {
+      console.log("Disconnected from server");
+      setConnectionStatus("disconnected");
     });
 
-    socket.on("moveMade", ({ index, player }) => {
-      setSquares((prev) => {
-        const copy = [...prev];
-        copy[index] = player;
-        return copy;
-      });
-      setXIsNext(player === "O");
+    socket.on(
+      "gameState",
+      ({
+        squares: serverSquares,
+        xIsNext: serverXIsNext,
+        symbol,
+        playerCount: count,
+      }) => {
+        console.log("Received game state:", { symbol, playerCount: count });
+        setSquares(serverSquares);
+        setXIsNext(serverXIsNext);
+        setPlayerSymbol(symbol);
+        setPlayerCount(count);
+        setWinner(null);
+        setIsDraw(false);
+      }
+    );
+
+    socket.on("playerJoined", ({ playerCount: count }) => {
+      console.log("Player joined, total players:", count);
+      setPlayerCount(count);
+    });
+
+    socket.on("playerLeft", ({ playerCount: count }) => {
+      console.log("Player left, remaining players:", count);
+      setPlayerCount(count);
+    });
+
+    socket.on(
+      "moveMade",
+      ({
+        index,
+        player,
+        xIsNext: serverXIsNext,
+        winner: serverWinner,
+        isDraw: serverIsDraw,
+      }) => {
+        console.log("Move made:", { index, player, winner: serverWinner });
+        setSquares((prev) => {
+          const copy = [...prev];
+          copy[index] = player;
+          return copy;
+        });
+        setXIsNext(serverXIsNext);
+
+        if (serverWinner) {
+          setWinner(serverWinner);
+        }
+        if (serverIsDraw) {
+          setIsDraw(true);
+        }
+      }
+    );
+
+    socket.on(
+      "gameReset",
+      ({ squares: serverSquares, xIsNext: serverXIsNext }) => {
+        console.log("Game reset by server");
+        setSquares(serverSquares);
+        setXIsNext(serverXIsNext);
+        setWinner(null);
+        setIsDraw(false);
+      }
+    );
+
+    socket.on("error", ({ message }) => {
+      console.error("Server error:", message);
+      alert(`Error: ${message}`);
     });
 
     return () => {
-      socket.off("assignSymbol");
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("gameState");
       socket.off("playerJoined");
+      socket.off("playerLeft");
       socket.off("moveMade");
+      socket.off("gameReset");
+      socket.off("error");
       socket.disconnect();
     };
-  }, [mode, lobbyId]);
+  }, [mode, lobbyId, boardWidth, boardHeight]);
 
   const handleClick = (i) => {
-    if (squares[i] || winner) return;
-
     if (mode === "vs-computer") {
-      if (!xIsNext || isComputing) return;
+      // Client-side logic for vs-computer
+      if (squares[i] || localWinner || !xIsNext || isComputing) return;
+
       const next = squares.slice();
       next[i] = "X";
       setSquares(next);
       setXIsNext(false);
     } else if (mode === "vs-player") {
-      if (
-        (xIsNext && playerSymbol !== "X") ||
-        (!xIsNext && playerSymbol !== "O")
-      ) {
-        return;
-      }
+      // Server-side validation for vs-player
+      if (squares[i] || winner || isDraw) return;
+
+      // Don't allow moves until both players are in the lobby
+      if (playerCount < 2) return;
+
+      // Check if it's our turn
+      const currentPlayer = xIsNext ? "X" : "O";
+      if (playerSymbol !== currentPlayer) return;
+
+      // Optimistic update
       const next = [...squares];
       next[i] = playerSymbol;
       setSquares(next);
       setXIsNext(!xIsNext);
-      socket.emit("makeMove", { lobbyId, index: i, player: playerSymbol });
+
+      // Send move to server
+      socket.emit("makeMove", { lobbyId, index: i });
     }
   };
 
   const handleReset = () => {
-    setSquares(Array(boardWidth * boardHeight).fill(null));
-    setXIsNext(true);
-    setIsComputing(false);
+    if (mode === "vs-computer") {
+      // Client-side reset for vs-computer
+      setSquares(Array(boardWidth * boardHeight).fill(null));
+      setXIsNext(true);
+      setIsComputing(false);
+    } else if (mode === "vs-player") {
+      socket.emit("resetGame", { lobbyId });
+    }
   };
 
   return (
@@ -228,16 +330,32 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
         {boardHeight})
       </h2>
 
+      {mode === "vs-player" && (
+        <p
+          className={`connection-status ${
+            connectionStatus === "connected" ? "connected" : "disconnected"
+          }`}
+        >
+          {connectionStatus === "connected" ? "● Connected" : "● Disconnected"}
+          {playerSymbol && ` | You are: ${playerSymbol}`}
+        </p>
+      )}
+
       <div className="status">{status}</div>
 
-      {mode === "vs-player" && lobbyId && (
-        <p>
-          Share this link with a friend to join:{" "}
-          <strong>
-            {window.location.origin}/game?mode=vs-player&width={boardWidth}
-            &height={boardHeight}&lobby={lobbyId}
-          </strong>
-        </p>
+      {mode === "vs-player" && lobbyId && playerCount < 2 && (
+        <div className="share-link-box">
+          <p className="share-link-title">
+            <strong>Share this link with a friend:</strong>
+          </p>
+          <input
+            type="text"
+            readOnly
+            className="share-link-input"
+            value={`${window.location.origin}/game?mode=vs-player&width=${boardWidth}&height=${boardHeight}&lobby=${lobbyId}`}
+            onClick={(e) => e.target.select()}
+          />
+        </div>
       )}
 
       <div className="board">
@@ -250,7 +368,7 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
                   key={i}
                   value={squares[i]}
                   onClick={() => handleClick(i)}
-                  isWinning={winner?.line?.includes(i)}
+                  isWinning={localWinner?.line?.includes(i)}
                 />
               );
             })}
@@ -261,7 +379,11 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
       <button
         onClick={handleReset}
         className={`reset-button ${
-          winner || squares.every(Boolean) ? "is-visible" : "is-hidden"
+          localWinner ||
+          isDraw ||
+          (mode === "vs-computer" && squares.every(Boolean))
+            ? "is-visible"
+            : "is-hidden"
         }`}
       >
         Reset Game

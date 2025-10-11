@@ -6,7 +6,7 @@ body {
   padding: 0;
   display: flex;
   justify-content: center;
-  align-items: center; 
+  align-items: center;
   min-height: 100vh;
 }
 
@@ -71,9 +71,10 @@ body {
   transition: border-color 0.3s ease;
 }
 
-
 /* === Buttons === */
-.back-button, .startGame-button, .reset-button {
+.back-button,
+.startGame-button,
+.reset-button {
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
@@ -85,15 +86,14 @@ body {
   user-select: none;
 }
 
-.reset-button{
+.reset-button {
   display: block;
   margin: 20px auto;
 }
 
-
 .reset-button.is-hidden {
   visibility: hidden;
-  pointer-events: none; 
+  pointer-events: none;
 }
 
 .reset-button.is-visible {
@@ -158,6 +158,47 @@ body {
   font-weight: bold;
   min-height: 24px; /* To prevent layout jump */
 }
+
+/* === Multiplayer Connection Status === */
+.connection-status {
+  font-size: 14px;
+  margin-top: 5px;
+  font-weight: 500;
+}
+
+.connection-status.connected {
+  color: green;
+}
+
+.connection-status.disconnected {
+  color: red;
+}
+
+/* === Share Link Box (Invite Friend) === */
+.share-link-box {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #fff3cd; /* soft yellow warning-style background */
+  border-radius: 5px;
+  text-align: left;
+}
+
+.share-link-title {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+.share-link-input {
+  width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background-color: white;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
 
 /* === Responsive Adjustments === */
 @media (max-width: 480px) {
