@@ -12,7 +12,6 @@ const io = new Server(httpServer, {
   },
 });
 
-// Store game states for each lobby
 const games = new Map();
 
 const WIN_LENGTH = 3;
@@ -70,10 +69,19 @@ io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
   socket.on("joinLobby", ({ lobbyId, boardWidth, boardHeight }) => {
+    if (
+      boardWidth < 3 ||
+      boardWidth > 20 ||
+      boardHeight < 3 ||
+      boardHeight > 20
+    ) {
+      socket.emit("error", { message: "Invalid board dimensions" });
+      return;
+    }
+
     console.log("Joining lobby:", lobbyId, "by", socket.id);
     socket.join(lobbyId);
 
-    // Initialize game state if it doesn't exist
     if (!games.has(lobbyId)) {
       games.set(lobbyId, {
         squares: Array(boardWidth * boardHeight).fill(null),
@@ -81,6 +89,8 @@ io.on("connection", (socket) => {
         boardWidth,
         boardHeight,
         players: {},
+        winner: null,
+        isDraw: false,
         gameOver: false,
       });
     }
@@ -89,32 +99,38 @@ io.on("connection", (socket) => {
     const clients = io.sockets.adapter.rooms.get(lobbyId);
     const playerCount = clients ? clients.size : 0;
 
-    // Assign symbol based on player order
     if (!game.players[socket.id]) {
-      if (playerCount === 1) {
+      const assignedSymbols = Object.values(game.players);
+
+      if (!assignedSymbols.includes("X")) {
         game.players[socket.id] = "X";
-      } else if (playerCount === 2) {
+      } else if (!assignedSymbols.includes("O")) {
         game.players[socket.id] = "O";
+      } else {
+        socket.disconnect();
+        return;
       }
     }
-
     const symbol = game.players[socket.id];
 
-    // Send current game state to the joining player
     socket.emit("gameState", {
       squares: game.squares,
       xIsNext: game.xIsNext,
       symbol: symbol,
       playerCount: playerCount,
+      boardWidth: game.boardWidth,
+      boardHeight: game.boardHeight,
+      winner: game.winner,
+      isDraw: game.isDraw,
+      gameOver: game.gameOver,
     });
 
-    // Notify other players
     socket.to(lobbyId).emit("playerJoined", {
       playerId: socket.id,
       playerCount: playerCount,
     });
 
-    console.log(`Players in lobby ${lobbyId}:`, game.players);
+    console.log(`Players in lobby ${lobbyId}:`, playerCount);
   });
 
   socket.on("makeMove", ({ lobbyId, index }) => {
@@ -125,21 +141,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const playerSymbol = game.players[socket.id];
-
-    // Validate move
-    if (!playerSymbol) {
-      socket.emit("error", { message: "You are not in this game" });
-      return;
-    }
-
-    // Check if both players are in the game
-    const playerCount = Object.keys(game.players).length;
-    if (playerCount < 2) {
-      socket.emit("error", { message: "Waiting for another player" });
-      return;
-    }
-
     if (game.gameOver) {
       socket.emit("error", { message: "Game is over" });
       return;
@@ -147,6 +148,18 @@ io.on("connection", (socket) => {
 
     if (game.squares[index] !== null) {
       socket.emit("error", { message: "Square already taken" });
+      return;
+    }
+
+    const playerSymbol = game.players[socket.id];
+    if (!playerSymbol) {
+      socket.emit("error", { message: "You are not in this game" });
+      return;
+    }
+
+    const playerCount = Object.keys(game.players).length;
+    if (playerCount < 2) {
+      socket.emit("error", { message: "Waiting for another player" });
       return;
     }
 
@@ -170,6 +183,8 @@ io.on("connection", (socket) => {
 
     if (winner || isDraw) {
       game.gameOver = true;
+      game.winner = winner; 
+      game.isDraw = isDraw;
     }
 
     // Broadcast the move to all players in the lobby
@@ -205,6 +220,8 @@ io.on("connection", (socket) => {
     game.squares = Array(game.boardWidth * game.boardHeight).fill(null);
     game.xIsNext = true;
     game.gameOver = false;
+    game.winner = null;
+    game.isDraw = false;
 
     // Broadcast reset to all players
     io.to(lobbyId).emit("gameReset", {

@@ -17,7 +17,6 @@ function Square({ value, onClick, isWinning }) {
 const WIN_LENGTH = 3;
 const COMPUTER_DELAY_MS = 500;
 
-// Keep client-side winner calculation for vs-computer mode
 function calculateWinner(squares, boardWidth, boardHeight) {
   const get = (r, c) => {
     if (r < 0 || r >= boardHeight || c < 0 || c >= boardWidth) return null;
@@ -118,8 +117,18 @@ function findBestMove(squares, boardWidth, boardHeight, player) {
   return emptySquares[Math.floor(Math.random() * emptySquares.length)];
 }
 
-function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
+function GameBoard({
+  boardSize: { boardWidth: initialWidth, boardHeight: initialHeight } = {
+    boardWidth: 3,
+    boardHeight: 3,
+  },
+  mode,
+  lobbyId,
+}) {
   const navigate = useNavigate();
+
+  const [boardWidth, setBoardWidth] = useState(initialWidth);
+  const [boardHeight, setBoardHeight] = useState(initialHeight);
 
   const [squares, setSquares] = useState(
     Array(boardWidth * boardHeight).fill(null)
@@ -132,7 +141,6 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
   const [playerCount, setPlayerCount] = useState(1);
   const [connectionStatus, setConnectionStatus] = useState("connecting");
 
-  // Calculate winner for vs-computer mode
   const localWinner =
     mode === "vs-computer"
       ? calculateWinner(squares, boardWidth, boardHeight)
@@ -155,7 +163,6 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
   };
 
   const status = getStatus();
-  // Computer AI logic (vs-computer mode only)
   useEffect(() => {
     if (!xIsNext && !localWinner && mode === "vs-computer") {
       setIsComputing(true);
@@ -173,7 +180,6 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
     }
   }, [xIsNext, localWinner, squares, mode, boardWidth, boardHeight]);
 
-  // Multiplayer socket logic (vs-player mode only)
   useEffect(() => {
     if (mode !== "vs-player") return;
 
@@ -183,7 +189,11 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
     socket.on("connect", () => {
       console.log("Connected to server");
       setConnectionStatus("connected");
-      socket.emit("joinLobby", { lobbyId, boardWidth, boardHeight });
+      socket.emit("joinLobby", {
+        lobbyId,
+        boardWidth: initialWidth,
+        boardHeight: initialHeight,
+      });
     });
 
     socket.on("disconnect", () => {
@@ -198,14 +208,29 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
         xIsNext: serverXIsNext,
         symbol,
         playerCount: count,
+        boardWidth: serverWidth,
+        boardHeight: serverHeight,
+        winner: serverWinner,
+        isDraw: serverIsDraw,
       }) => {
-        console.log("Received game state:", { symbol, playerCount: count });
+        console.log("Received game state:", {
+          squares: serverSquares,
+          xIsNext: serverXIsNext,
+          symbol,
+          playerCount: count,
+          boardWidth: serverWidth,
+          boardHeight: serverHeight,
+          winner: serverWinner,
+          isDraw: serverIsDraw,
+        });
+        setBoardWidth(serverWidth);
+        setBoardHeight(serverHeight);
         setSquares(serverSquares);
         setXIsNext(serverXIsNext);
         setPlayerSymbol(symbol);
         setPlayerCount(count);
-        setWinner(null);
-        setIsDraw(false);
+        setWinner(serverWinner);
+        setIsDraw(serverIsDraw);
       }
     );
 
@@ -272,11 +297,10 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
       socket.off("error");
       socket.disconnect();
     };
-  }, [mode, lobbyId, boardWidth, boardHeight]);
+  }, [mode, lobbyId, initialWidth, initialHeight]);
 
   const handleClick = (i) => {
     if (mode === "vs-computer") {
-      // Client-side logic for vs-computer
       if (squares[i] || localWinner || !xIsNext || isComputing) return;
 
       const next = squares.slice();
@@ -284,30 +308,24 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
       setSquares(next);
       setXIsNext(false);
     } else if (mode === "vs-player") {
-      // Server-side validation for vs-player
       if (squares[i] || winner || isDraw) return;
 
-      // Don't allow moves until both players are in the lobby
       if (playerCount < 2) return;
 
-      // Check if it's our turn
       const currentPlayer = xIsNext ? "X" : "O";
       if (playerSymbol !== currentPlayer) return;
 
-      // Optimistic update
       const next = [...squares];
       next[i] = playerSymbol;
       setSquares(next);
       setXIsNext(!xIsNext);
 
-      // Send move to server
       socket.emit("makeMove", { lobbyId, index: i });
     }
   };
 
   const handleReset = () => {
     if (mode === "vs-computer") {
-      // Client-side reset for vs-computer
       setSquares(Array(boardWidth * boardHeight).fill(null));
       setXIsNext(true);
       setIsComputing(false);
@@ -318,10 +336,7 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
 
   return (
     <div className="game">
-      <button
-        onClick={() => navigate(`/settings?mode=${mode}`)}
-        className="back-button"
-      >
+      <button onClick={() => navigate("/")} className="back-button">
         ← Back
       </button>
 
@@ -352,7 +367,7 @@ function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
             type="text"
             readOnly
             className="share-link-input"
-            value={`${window.location.origin}/game?mode=vs-player&width=${boardWidth}&height=${boardHeight}&lobby=${lobbyId}`}
+            value={`${window.location.origin}/game?lobby=${lobbyId}`}
             onClick={(e) => e.target.select()}
           />
         </div>
