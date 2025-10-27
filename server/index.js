@@ -2,7 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";  
+import { dirname, join } from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -71,8 +71,6 @@ function calculateWinner(squares, boardWidth, boardHeight) {
 }
 
 io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
-
   socket.on("joinLobby", ({ lobbyId, boardWidth, boardHeight }) => {
     if (
       boardWidth < 3 ||
@@ -84,7 +82,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    console.log("Joining lobby:", lobbyId, "by", socket.id);
     socket.join(lobbyId);
 
     if (!games.has(lobbyId)) {
@@ -97,6 +94,7 @@ io.on("connection", (socket) => {
         winner: null,
         isDraw: false,
         gameOver: false,
+        firstPlayer: "X",
       });
     }
 
@@ -134,8 +132,6 @@ io.on("connection", (socket) => {
       playerId: socket.id,
       playerCount: playerCount,
     });
-
-    console.log(`Players in lobby ${lobbyId}:`, playerCount);
   });
 
   socket.on("makeMove", ({ lobbyId, index }) => {
@@ -200,11 +196,6 @@ io.on("connection", (socket) => {
       winner: winner,
       isDraw: isDraw,
     });
-
-    console.log(`Move made in lobby ${lobbyId}:`, {
-      index,
-      player: playerSymbol,
-    });
   });
 
   socket.on("resetGame", ({ lobbyId }) => {
@@ -221,26 +212,21 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Reset game state
+    game.firstPlayer = game.firstPlayer === "X" ? "O" : "X";
+
     game.squares = Array(game.boardWidth * game.boardHeight).fill(null);
-    game.xIsNext = true;
+    game.xIsNext = game.firstPlayer === "X";
     game.gameOver = false;
     game.winner = null;
     game.isDraw = false;
 
-    // Broadcast reset to all players
     io.to(lobbyId).emit("gameReset", {
       squares: game.squares,
       xIsNext: game.xIsNext,
     });
-
-    console.log(`Game reset in lobby ${lobbyId}`);
   });
 
   socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
-
-    // Clean up: remove player from games and notify others
     games.forEach((game, lobbyId) => {
       if (game.players[socket.id]) {
         delete game.players[socket.id];
@@ -248,7 +234,6 @@ io.on("connection", (socket) => {
         const clients = io.sockets.adapter.rooms.get(lobbyId);
         const playerCount = clients ? clients.size : 0;
 
-        // Notify remaining players
         io.to(lobbyId).emit("playerLeft", {
           playerId: socket.id,
           playerCount: playerCount,
@@ -257,7 +242,6 @@ io.on("connection", (socket) => {
         // Clean up empty lobbies
         if (playerCount === 0) {
           games.delete(lobbyId);
-          console.log(`Lobby ${lobbyId} deleted (empty)`);
         }
       }
     });
@@ -268,7 +252,7 @@ if (process.env.NODE_ENV === "production") {
   const distPath = join(__dirname, "..", "dist");
   app.use(express.static(distPath));
 
-  app.get("*", (req, res) => {  
+  app.get("*", (req, res) => {
     res.sendFile(join(distPath, "index.html"));
   });
 } else {

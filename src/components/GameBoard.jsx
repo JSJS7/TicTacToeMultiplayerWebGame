@@ -134,6 +134,7 @@ function GameBoard({
     Array(boardWidth * boardHeight).fill(null)
   );
   const [xIsNext, setXIsNext] = useState(true);
+  const [XIsFirstPlayer, setXIsFirstPlayer] = useState(true);
   const [isComputing, setIsComputing] = useState(false);
   const [playerSymbol, setPlayerSymbol] = useState(null);
   const [winner, setWinner] = useState(null);
@@ -187,7 +188,6 @@ function GameBoard({
     setConnectionStatus("connecting");
 
     socket.on("connect", () => {
-      console.log("Connected to server");
       setConnectionStatus("connected");
       socket.emit("joinLobby", {
         lobbyId,
@@ -197,7 +197,6 @@ function GameBoard({
     });
 
     socket.on("disconnect", () => {
-      console.log("Disconnected from server");
       setConnectionStatus("disconnected");
     });
 
@@ -213,16 +212,6 @@ function GameBoard({
         winner: serverWinner,
         isDraw: serverIsDraw,
       }) => {
-        console.log("Received game state:", {
-          squares: serverSquares,
-          xIsNext: serverXIsNext,
-          symbol,
-          playerCount: count,
-          boardWidth: serverWidth,
-          boardHeight: serverHeight,
-          winner: serverWinner,
-          isDraw: serverIsDraw,
-        });
         setBoardWidth(serverWidth);
         setBoardHeight(serverHeight);
         setSquares(serverSquares);
@@ -235,12 +224,10 @@ function GameBoard({
     );
 
     socket.on("playerJoined", ({ playerCount: count }) => {
-      console.log("Player joined, total players:", count);
       setPlayerCount(count);
     });
 
     socket.on("playerLeft", ({ playerCount: count }) => {
-      console.log("Player left, remaining players:", count);
       setPlayerCount(count);
     });
 
@@ -253,7 +240,6 @@ function GameBoard({
         winner: serverWinner,
         isDraw: serverIsDraw,
       }) => {
-        console.log("Move made:", { index, player, winner: serverWinner });
         setSquares((prev) => {
           const copy = [...prev];
           copy[index] = player;
@@ -273,7 +259,6 @@ function GameBoard({
     socket.on(
       "gameReset",
       ({ squares: serverSquares, xIsNext: serverXIsNext }) => {
-        console.log("Game reset by server");
         setSquares(serverSquares);
         setXIsNext(serverXIsNext);
         setWinner(null);
@@ -282,7 +267,6 @@ function GameBoard({
     );
 
     socket.on("error", ({ message }) => {
-      console.error("Server error:", message);
       alert(`Error: ${message}`);
     });
 
@@ -327,7 +311,10 @@ function GameBoard({
   const handleReset = () => {
     if (mode === "vs-computer") {
       setSquares(Array(boardWidth * boardHeight).fill(null));
-      setXIsNext(true);
+
+      const newFirstPlayer = !XIsFirstPlayer;
+      setXIsFirstPlayer(newFirstPlayer);
+      setXIsNext(newFirstPlayer);
       setIsComputing(false);
     } else if (mode === "vs-player") {
       socket.emit("resetGame", { lobbyId });
