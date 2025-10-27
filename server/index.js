@@ -7,7 +7,7 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: process.env.NODE_ENV === "production" ? false : "*",
     methods: ["GET", "POST"],
   },
 });
@@ -183,7 +183,7 @@ io.on("connection", (socket) => {
 
     if (winner || isDraw) {
       game.gameOver = true;
-      game.winner = winner; 
+      game.winner = winner;
       game.isDraw = isDraw;
     }
 
@@ -259,9 +259,18 @@ io.on("connection", (socket) => {
   });
 });
 
-app.get("/", (req, res) => {
-  res.send("TicTacToe server is running!");
-});
+if (process.env.NODE_ENV === "production") {
+  const distPath = join(__dirname, "..", "dist");
+  app.use(express.static(distPath));
+
+  app.get("*", (req, res) => {
+    res.sendFile(join(distPath, "index.html"));
+  });
+} else {
+  app.get("/", (req, res) => {
+    res.send("Server is running");
+  });
+}
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
