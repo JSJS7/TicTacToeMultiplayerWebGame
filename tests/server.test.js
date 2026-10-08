@@ -94,13 +94,14 @@ test("Socket.IO validation, authoritative moves and one reset per finished round
     assert.ok(x.lastState.squares.every((square) => square === null));
   });
 
-  await t.test("both clients receive the same accepted board; three signs end a 5x5 round", async () => {
-    for (const [socket, index] of [[x,0], [o,5], [x,1], [o,6], [x,2]]) {
+  await t.test("both clients receive the same accepted board; only five signs end a 5x5 round", async () => {
+    for (const [socket, index] of [[x,0], [o,5], [x,1], [o,6], [x,2], [o,7], [x,3], [o,8], [x,4]]) {
       assert.equal((await request(socket, "makeMove", { ...action, index })).ok, true);
       await waitState(x, (state) => state.squares[index] !== null);
       await waitState(o, (state) => state.squares[index] !== null);
       assert.deepEqual(x.lastState.squares, o.lastState.squares);
-      assert.deepEqual(x.lastState.scores, { X: index === 2 ? 1 : 0, O: 0 });
+      assert.deepEqual(x.lastState.scores, { X: index === 4 ? 1 : 0, O: 0 });
+      assert.equal(x.lastState.gameOver, index === 4);
       assert.deepEqual(o.lastState.scores, x.lastState.scores);
       if (index === 0) assert.equal((await request(o, "makeMove", { ...action, index: 0 })).ok, false);
     }
@@ -137,7 +138,7 @@ test("Socket.IO validation, authoritative moves and one reset per finished round
     assert.deepEqual(rejoined.lastState.scores, { X: 1, O: 0 });
     await waitState(x, (state) => state.playerCount === 2);
 
-    for (const [player, index] of [[x, 5], [rejoined, 1], [x, 6], [rejoined, 2]]) {
+    for (const [player, index] of [[x, 5], [rejoined, 1], [x, 6], [rejoined, 2], [x, 7], [rejoined, 3], [x, 8], [rejoined, 4]]) {
       assert.equal((await request(player, "makeMove", { lobbyId, roundId: 2, index })).ok, true);
     }
     await Promise.all([x, rejoined].map((socket) =>
@@ -147,7 +148,7 @@ test("Socket.IO validation, authoritative moves and one reset per finished round
     assert.deepEqual(rejoined.lastState.scores, { X: 1, O: 1 });
     assert.equal((await request(x, "resetGame", { lobbyId, roundId: 2 })).ok, true);
 
-    for (const [player, index] of [[x, 0], [rejoined, 5], [x, 1], [rejoined, 6], [x, 2]]) {
+    for (const [player, index] of [[x, 0], [rejoined, 5], [x, 1], [rejoined, 6], [x, 2], [rejoined, 7], [x, 3], [rejoined, 8], [x, 4]]) {
       assert.equal((await request(player, "makeMove", { lobbyId, roundId: 3, index })).ok, true);
     }
     await Promise.all([x, rejoined].map((socket) =>
@@ -181,6 +182,16 @@ test("Socket.IO validation, authoritative moves and one reset per finished round
         assert.equal(first.lastState.isDraw, false);
         assert.equal(first.lastState.roundId, 2);
         assert.deepEqual(first.lastState.scores, { X: 0, O: 0 });
+      } else {
+        for (const [turn, index] of [0, 4, 1, 5, 2, 6, 3].entries()) {
+          assert.equal((await request(turn % 2 === 0 ? first : second, "makeMove", {
+            lobbyId: id, roundId: 1, index,
+          })).ok, true);
+          await waitState(first, (state) => state.squares[index] !== null);
+          assert.equal(first.lastState.gameOver, index === 3);
+        }
+        assert.equal(first.lastState.winner.player, "X");
+        assert.deepEqual(first.lastState.winner.line, [0, 1, 2, 3]);
       }
       first.disconnect();
       second.disconnect();

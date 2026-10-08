@@ -63,7 +63,7 @@ function Menu() {
         ))}
       </div>
       <p>Selected Board Size: <strong>{size} x {size}</strong></p>
-      <p>Three in a row wins on every board.</p>
+      <p>{size} in a row wins.</p>
       <button className="startGame-button" onClick={startGame}>Start Game</button>
     </div>
   );

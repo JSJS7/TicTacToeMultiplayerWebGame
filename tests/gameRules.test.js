@@ -25,19 +25,22 @@ test("all 19,683 possible 3x3 positions agree with independent winning lines", (
   }
 });
 
-test("three signs still win in every direction on 4x4 and 5x5; rows cannot wrap", () => {
+test("4x4 and 5x5 require a full line in every direction; shorter lines and wrapping do not win", () => {
   for (const size of [4, 5]) {
     for (const [dr, dc] of [[0,1], [1,0], [1,1], [1,-1]]) {
       for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
-        if (r + 2 * dr >= size || c + 2 * dc < 0 || c + 2 * dc >= size) continue;
+        if (r + (size - 1) * dr >= size || c + (size - 1) * dc < 0 || c + (size - 1) * dc >= size) continue;
         const board = Array(size * size).fill(null);
-        const line = [0,1,2].map((i) => (r + i * dr) * size + c + i * dc);
-        for (const i of line) board[i] = "O";
+        const line = Array.from({ length: size }, (_, i) => (r + i * dr) * size + c + i * dc);
+        for (const i of line.slice(0, -1)) board[i] = "O";
+        assert.equal(calculateWinner(board, size, size), null);
+        board[line.at(-1)] = "O";
         assert.equal(calculateWinner(board, size, size)?.player, "O");
+        assert.deepEqual(calculateWinner(board, size, size).line, line);
       }
     }
     const board = Array(size * size).fill(null);
-    for (const i of [size - 1, size, size + 1]) board[i] = "X";
+    for (let i = size - 1; i < 2 * size - 1; i++) board[i] = "X";
     assert.equal(calculateWinner(board, size, size), null);
   }
 });
