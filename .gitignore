@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local browser artifacts and temporary work
+.tmp/
+.playwright-mcp/
