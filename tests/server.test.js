@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { io } from "socket.io-client";
+import { availableMoves } from "../shared/chaosRules.js";
 
 const request = (socket, event, data) => new Promise((resolve, reject) => {
   socket.timeout(2000).emit(event, data, (err, response) => err ? reject(err) : resolve(response));
@@ -156,6 +157,47 @@ test("Socket.IO validation, authoritative moves and one reset per finished round
     ));
     assert.deepEqual(x.lastState.scores, { X: 2, O: 1 });
     assert.deepEqual(rejoined.lastState.scores, { X: 2, O: 1 });
+  });
+
+  await t.test("Chaos mode, server-owned effects and reconnect snapshots", async () => {
+    const first = await connect();
+    const second = await connect();
+    const settings = { lobbyId: "chaos-test", boardWidth: 5, boardHeight: 5, mode: "chaos" };
+    for (const data of [{ ...settings, mode: "invalid" }, { ...settings, mode: {} }, { ...settings, boardWidth: 4, boardHeight: 4 }]) {
+      assert.equal((await request(first, "joinLobby", data)).ok, false);
+    }
+    assert.equal((await request(first, "joinLobby", settings)).ok, true);
+    assert.equal((await request(second, "joinLobby", { ...settings, mode: "classic", boardWidth: 3, boardHeight: 3 })).ok, true);
+    await waitState(first, (state) => state.playerCount === 2);
+    assert.equal(second.lastState.mode, "chaos");
+    assert.equal(second.lastState.boardWidth, 5);
+    const action = { lobbyId: settings.lobbyId, roundId: 1 };
+    assert.equal((await request(first, "makeMove", { ...action, index: 0 })).ok, true);
+    assert.equal(first.lastState.chaos.effects.length, 0);
+    assert.equal((await request(second, "makeMove", { ...action, index: 24, chaos: { effects: [] }, mode: "classic" })).ok, true);
+    await waitState(first, (state) => state.chaos.effects.length === 1);
+    const effect = first.lastState.chaos.effects[0];
+    assert.deepEqual(first.lastState.chaos, second.lastState.chaos);
+    assert.equal((await request(first, "makeMove", { ...action, index: effect.index })).ok, true);
+    await waitState(second, (state) => state.squares[effect.index] === "X");
+    assert.deepEqual(first.lastState.chaos, second.lastState.chaos);
+    if (effect.type === "double") {
+      assert.equal(first.lastState.chaos.bonus.player, "X");
+      assert.equal((await request(second, "makeMove", { ...action, index: availableMoves(first.lastState)[0] })).ok, false);
+      const illegal = first.lastState.squares.findIndex((value, index) => value === null && !availableMoves(first.lastState).includes(index));
+      assert.equal((await request(first, "makeMove", { ...action, index: illegal })).ok, false);
+    }
+    const snapshot = structuredClone(first.lastState);
+    second.disconnect();
+    await waitState(first, (state) => state.playerCount === 1);
+    const active = first.lastState.xIsNext ? first : second;
+    if (active === first) assert.equal((await request(first, "makeMove", { ...action, index: availableMoves(snapshot)[0] })).ok, false);
+    const returning = await connect();
+    assert.equal((await request(returning, "joinLobby", settings)).ok, true);
+    assert.deepEqual(returning.lastState.chaos, snapshot.chaos);
+    assert.deepEqual(returning.lastState.squares, snapshot.squares);
+    first.disconnect();
+    returning.disconnect();
   });
 
   await t.test("3x3 and 4x4 presets work; a draw also permits one reset", async () => {

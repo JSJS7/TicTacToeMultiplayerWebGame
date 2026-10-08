@@ -3,7 +3,8 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { calculateWinner, isValidBoardSize } from "../shared/gameRules.js";
+import { isValidBoardSize } from "../shared/gameRules.js";
+import { createGame, playMove, resetGame } from "../shared/gameEngine.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -21,6 +22,8 @@ const validLobbyId = (id) => typeof id === "string" && /^[a-zA-Z0-9_-]{1,64}$/.t
 function broadcastState(game) {
   for (const [id, symbol] of Object.entries(game.players)) {
     io.to(id).emit("gameState", {
+      mode: game.mode,
+      chaos: game.chaos,
       squares: game.squares,
       xIsNext: game.xIsNext,
       boardWidth: game.boardWidth,
@@ -52,6 +55,10 @@ io.on("connection", (socket) => {
       return reject(ack, "Invalid lobby or board size. Choose 3x3, 4x4 or 5x5.");
     }
     const { lobbyId, boardWidth, boardHeight } = data;
+    const mode = data.mode ?? "classic";
+    if (!["classic", "chaos"].includes(mode) || (mode === "chaos" && boardWidth !== 5)) {
+      return reject(ack, "Choose classic or Chaos. Chaos requires a 5x5 board.");
+    }
     if (socket.data.lobbyId && socket.data.lobbyId !== lobbyId) {
       return reject(ack, "Leave your current lobby before joining another one.");
     }
@@ -60,19 +67,7 @@ io.on("connection", (socket) => {
       return reject(ack, "This lobby is full.");
     }
     if (!game) {
-      game = {
-        squares: Array(boardWidth * boardHeight).fill(null),
-        xIsNext: true,
-        boardWidth,
-        boardHeight,
-        players: {},
-        winner: null,
-        isDraw: false,
-        scores: { X: 0, O: 0 },
-        gameOver: false,
-        firstPlayer: "X",
-        roundId: 1,
-      };
+      game = { ...createGame(boardWidth, boardHeight, mode), players: {} };
       games.set(lobbyId, game);
     }
     if (!game.players[socket.id]) {
@@ -113,12 +108,11 @@ io.on("connection", (socket) => {
     const symbol = game.players[socket.id];
     if (symbol !== (game.xIsNext ? "X" : "O")) return reject(ack, "Not your turn.");
     if (game.squares[data.index] !== null) return reject(ack, "Square already taken.");
-    game.squares[data.index] = symbol;
-    game.xIsNext = !game.xIsNext;
-    game.winner = calculateWinner(game.squares, game.boardWidth, game.boardHeight);
-    game.isDraw = !game.winner && !game.squares.includes(null);
-    game.gameOver = Boolean(game.winner || game.isDraw);
-    if (game.winner) game.scores[game.winner.player] += 1;
+    try {
+      Object.assign(game, playMove(game, data.index));
+    } catch (error) {
+      return reject(ack, error.message);
+    }
     broadcastState(game);
     accept(ack);
   });
@@ -127,13 +121,7 @@ io.on("connection", (socket) => {
     const game = getGame(data, ack);
     if (!game) return;
     if (!game.gameOver) return reject(ack, "You can reset only after the round ends.");
-    game.firstPlayer = game.firstPlayer === "X" ? "O" : "X";
-    game.squares = Array(game.boardWidth * game.boardHeight).fill(null);
-    game.xIsNext = game.firstPlayer === "X";
-    game.gameOver = false;
-    game.winner = null;
-    game.isDraw = false;
-    game.roundId += 1;
+    Object.assign(game, resetGame(game));
     broadcastState(game);
     accept(ack);
   });

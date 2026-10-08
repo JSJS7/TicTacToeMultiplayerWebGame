@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "test": "node --test tests/gameRules.test.js tests/server.test.js",
+    "test": "node --test tests/gameRules.test.js tests/chaos.test.js tests/server.test.js",
     "test:production": "npm run build && node --test tests/production.test.js"
   },
   "dependencies": {
