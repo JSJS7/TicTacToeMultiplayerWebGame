@@ -301,4 +301,72 @@ test("the last neighboring bonus move ends a full-board draw without getting stu
   assert.equal(second.isDraw, true);
   assert.equal(second.chaos.bonus, null);
   assert.deepEqual(second.scores, { X: 0, O: 0 });
+  assert.deepEqual(second.chaos.skippedTurns, { X: 0, O: 0 });
+  assert.match(second.chaos.lastEvent, /draw/);
+});
+
+test("winning on the Double step tile ends immediately without asking for a bonus or skipping a future turn", () => {
+  const game = withEffect("double", 4);
+  for (const index of [0, 1, 2, 3]) game.squares[index] = "X";
+  game.chaos.skippedTurns.O = 1;
+  const next = playMove(game, 4, () => 0);
+  assert.equal(next.winner.player, "X");
+  assert.equal(next.chaos.bonus, null);
+  assert.deepEqual(next.chaos.skippedTurns, { X: 0, O: 0 });
+  assert.match(next.chaos.lastEvent, /won/);
+  assert.doesNotMatch(next.chaos.lastEvent, /choose|skips/);
+  assert.deepEqual(next.scores, { X: 1, O: 0 });
+});
+
+test("a winning bonus does not promise a skipped turn after the round is over", () => {
+  const game = withEffect("double", 3);
+  game.squares[1] = "X";
+  game.squares[2] = "X";
+  const next = playMove(playMove(game, 3, () => 0), 4, () => 0);
+  assert.equal(next.winner.player, "X");
+  assert.deepEqual(next.chaos.skippedTurns, { X: 0, O: 0 });
+  assert.match(next.chaos.lastEvent, /won/);
+  assert.doesNotMatch(next.chaos.lastEvent, /skip/);
+});
+
+test("sacrifice resolves before checking a completed line and prevents a transient win from counting", () => {
+  const game = withEffect("erase", 4);
+  for (const index of [0, 1, 2, 3]) game.squares[index] = "X";
+  const next = playMove(game, 4, () => 0);
+  assert.equal(next.squares[0], null);
+  assert.equal(next.squares[24], null);
+  assert.equal(next.squares[4], "X");
+  assert.equal(next.winner, null);
+  assert.equal(next.gameOver, false);
+  assert.deepEqual(next.scores, { X: 0, O: 0 });
+});
+
+test("Double step behaves symmetrically for O and consecutive doubles clear both skip debts", () => {
+  const game = withEffect("double", 6);
+  game.xIsNext = false;
+  let next = playMove(game, 6, () => 0);
+  assert.equal(next.chaos.bonus.player, "O");
+  next = playMove(next, 7, () => 0);
+  assert.equal(next.xIsNext, true);
+  assert.equal(next.chaos.skippedTurns.O, 1);
+  next.chaos.effects.push({ id: 2, type: "double", index: 18 });
+  next = playMove(next, 18, () => 0);
+  next = playMove(next, 17, () => 0);
+  assert.equal(next.xIsNext, false);
+  assert.deepEqual(next.chaos.skippedTurns, { X: 0, O: 0 });
+  assert.equal(next.chaos.turnNumber, 6);
+});
+
+test("sacrifice previews retarget after another effect erases the selected marks", () => {
+  const game = withEffect("erase");
+  game.squares[1] = "X";
+  game.squares[23] = "O";
+  game.chaos.effects.push({ id: 2, type: "erase", index: 13, targets: { X: 0, O: 24 } });
+  const next = playMove(game, 12, () => 0);
+  assert.deepEqual(next.chaos.effects[0].targets, { X: 1, O: 23 });
+  const final = playMove(next, 13, () => 0.99);
+  assert.equal(final.squares[1], null);
+  assert.equal(final.squares[23], null);
+  assert.equal(final.squares[12], "X");
+  assert.equal(final.squares[13], "O");
 });

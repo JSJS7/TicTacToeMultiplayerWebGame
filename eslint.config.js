@@ -10,12 +10,9 @@ export default defineConfig([
     files: ['**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
-      reactHooks.configs['recommended-latest'],
-      reactRefresh.configs.vite,
     ],
     languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
+      ecmaVersion: 'latest',
       parserOptions: {
         ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },
@@ -27,7 +24,19 @@ export default defineConfig([
     },
   },
   {
-    files: ['server/**/*.js', 'tests/**/*.js'],
+    files: ['src/**/*.{js,jsx}'],
+    extends: [
+      reactHooks.configs['recommended-latest'],
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: { globals: globals.browser },
+  },
+  {
+    files: ['server/**/*.js', 'tests/**/*.js', '*.config.js'],
     languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['shared/**/*.js'],
+    languageOptions: { globals: { structuredClone: 'readonly' } },
   },
 ])

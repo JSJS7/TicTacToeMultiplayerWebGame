@@ -65,10 +65,13 @@ const emptyTiles = (game) =>
 const plainTiles = (game) => emptyTiles(game).filter((index) =>
   !game.chaos.effects.some((effect) => effect.index === index),
 );
-const scatterTargets = (game, anchor, player) => plainTiles(game).filter((index) =>
-  index !== anchor && !areNeighbors(index, anchor, game.boardWidth) &&
-  markIndices(game, player).every((mark) => !areNeighbors(index, mark, game.boardWidth)),
-);
+const scatterTargets = (game, anchor, player) => {
+  const marks = markIndices(game, player);
+  return plainTiles(game).filter((index) =>
+    index !== anchor && !areNeighbors(index, anchor, game.boardWidth) &&
+    marks.every((mark) => !areNeighbors(index, mark, game.boardWidth)),
+  );
+};
 
 export function refreshTargets(game, random) {
   for (const effect of game.chaos.effects) {
@@ -92,7 +95,8 @@ export function spawnEffect(game, random) {
   if (chaos.turnNumber < chaos.nextSpawnAt) return;
   chaos.nextSpawnAt = chaos.turnNumber + 4;
   if (chaos.effects.length >= 2) return;
-  const empty = plainTiles(game).filter((index) =>
+  const plain = plainTiles(game);
+  const empty = plain.filter((index) =>
     !chaos.effects.some((effect) => effect.type === "block" && effect.target === index),
   );
   const remote = empty.filter((index) =>
@@ -101,10 +105,10 @@ export function spawnEffect(game, random) {
     ),
   );
   const options = {
-    block: empty.filter(() => plainTiles(game).length > 1),
+    block: plain.length > 1 ? empty : [],
     scatter: remote.filter((index) => ["X", "O"].every((player) => scatterTargets(game, index, player).length > 0)),
     double: remote.filter((index) =>
-      plainTiles(game).some((other) =>
+      plain.some((other) =>
         areNeighbors(index, other, game.boardWidth),
       ),
     ),
@@ -123,7 +127,7 @@ export function spawnEffect(game, random) {
     type,
     index: choose(options[type], random),
   };
-  if (type === "block") effect.target = choose(plainTiles(game).filter((index) => index !== effect.index), random);
+  if (type === "block") effect.target = choose(plain.filter((index) => index !== effect.index), random);
   if (type === "erase")
     effect.targets = {
       X: choose(markIndices(game, "X"), random),

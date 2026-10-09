@@ -4,7 +4,18 @@ import { useOnlineGame } from "../hooks/useOnlineGame.js";
 import ChaosLegend from "./ChaosLegend.jsx";
 import BoardGrid from "./BoardGrid.jsx";
 import PlayerText from "./PlayerText.jsx";
-import "../App.css";
+
+function GameStatus({ game, isOnline }) {
+  if (game.winner) return <PlayerText text={`Winner: ${game.winner.player}`} />;
+  if (game.isDraw) return "It's a draw!";
+  if (isOnline && game.playerCount !== 2) return "Waiting for opponent...";
+
+  const player = game.xIsNext ? "X" : "O";
+  const text = game.chaos?.bonus
+    ? `${player}: choose a neighboring tile for your bonus mark`
+    : `Next: ${player}`;
+  return <PlayerText text={text} />;
+}
 
 export default function GameBoard({ boardSize: { boardWidth, boardHeight }, mode, lobbyId }) {
   const navigate = useNavigate();
@@ -12,15 +23,7 @@ export default function GameBoard({ boardSize: { boardWidth, boardHeight }, mode
   const computer = useComputerGame(!isOnline, boardWidth, boardHeight);
   const online = useOnlineGame(isOnline, lobbyId, boardWidth, boardHeight, mode === "chaos" ? "chaos" : "classic");
   const { game, canPlay, play, reset } = isOnline ? online : computer;
-  const currentPlayer = game.xIsNext ? "X" : "O";
   const isChaos = game.mode === "chaos";
-  const playerName = <span className={`player-${currentPlayer.toLowerCase()}`}>{currentPlayer}</span>;
-  const status = game.winner
-    ? <>Winner: <span className={`player-${game.winner.player.toLowerCase()}`}>{game.winner.player}</span></>
-    : game.isDraw ? "It's a draw!"
-      : isOnline && game.playerCount !== 2 ? "Waiting for opponent..."
-        : game.chaos?.bonus ? <>{playerName}: choose a neighboring tile for your bonus mark</>
-          : <>Next: {playerName}</>;
 
   return (
     <div className={`game ${isChaos ? "chaos-game" : ""}`}>
@@ -37,7 +40,7 @@ export default function GameBoard({ boardSize: { boardWidth, boardHeight }, mode
           {game.symbol && <> | You are: <span className={`player-${game.symbol.toLowerCase()}`}>{game.symbol}</span></>}
         </p>
       )}
-      <div className="status" role="status" aria-live="polite">{status}</div>
+      <div className="status" role="status" aria-live="polite"><GameStatus game={game} isOnline={isOnline} /></div>
       <div className="game-notice">
         {isChaos && <p className="chaos-event" role="status"><PlayerText text={game.chaos.lastEvent} /></p>}
       </div>

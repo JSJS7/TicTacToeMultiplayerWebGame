@@ -46,13 +46,25 @@ export function playMove(game, index, random = Math.random) {
     }
   }
   next.winner = calculateWinner(next.squares, next.boardWidth, next.boardHeight);
-  if (next.winner && next.chaos) next.chaos.bonus = null;
-  if (next.chaos && !next.chaos.bonus) finishChaosTurn(next);
+  if (next.winner && next.chaos?.bonus) {
+    next.chaos.lastEvent = `${player} collected Double step and won the round.`;
+    next.chaos.bonus = null;
+  }
+  if (next.chaos && !next.chaos.bonus && !next.winner) finishChaosTurn(next);
   else if (!next.chaos) next.xIsNext = !game.xIsNext;
   next.isDraw = !next.winner && availableMoves(next).length === 0;
   next.gameOver = Boolean(next.winner || next.isDraw);
   if (next.winner) next.scores[next.winner.player] += 1;
   if (next.chaos) {
+    if (next.gameOver) {
+      next.chaos.bonus = null;
+      next.chaos.skippedTurns = { X: 0, O: 0 };
+      if (game.chaos.bonus) {
+        next.chaos.lastEvent = next.winner
+          ? `${player} placed the bonus mark and won the round.`
+          : `${player} placed the bonus mark. The round ended in a draw.`;
+      }
+    }
     refreshTargets(next, random);
     if (!next.gameOver && !next.chaos.bonus) spawnEffect(next, random);
   }
